@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import logging
 import os
 import statistics
@@ -93,6 +94,7 @@ class ControllerApplication(zigpy.application.ControllerApplication):
         self._watchdog_feed_counter = 0
 
         self._req_lock = asyncio.Lock()
+        self._packet_capture_channel: int | None = None
 
     @property
     def controller_event(self):
@@ -751,6 +753,48 @@ class ControllerApplication(zigpy.application.ControllerApplication):
                     lqi=lastHopLqi,
                     rssi=lastHopRssi,
                 )
+
+    def _check_status(self, status: t.sl_Status | t.EmberStatus) -> None:
+        if t.sl_Status.from_ember_status(status) != t.sl_Status.OK:
+            raise ControllerError(f"Command failed: {status!r}")
+
+    async def _packet_capture(self, channel: int):
+        (status,) = await self._ezsp.mfglibStart(rxCallback=True)
+        self._check_status(status)
+
+        try:
+            await self._packet_capture_change_channel(channel=channel)
+            assert self._packet_capture_channel is not None
+
+            queue = asyncio.Queue()
+
+            with self._ezsp.callback_for_commands(
+                {"mfglibRxHandler"},
+                callback=lambda _, response: queue.put_nowait(
+                    (datetime.now(timezone.utc), response)
+                ),
+            ):
+                while True:
+                    timestamp, (linkQuality, rssi, packetContents) = await queue.get()
+
+                    # The last two bytes are not a FCS
+                    packetContents = packetContents[:-2]
+
+                    yield zigpy.types.CapturedPacket(
+                        timestamp=timestamp,
+                        rssi=rssi,
+                        lqi=linkQuality,
+                        channel=self._packet_capture_channel,
+                        data=packetContents,
+                    )
+        finally:
+            (status,) = await self._ezsp.mfglibEnd()
+            self._check_status(status)
+
+    async def _packet_capture_change_channel(self, channel: int):
+        (status,) = await self._ezsp.mfglibSetChannel(channel=channel)
+        self._check_status(status)
+        self._packet_capture_channel = channel
 
     async def send_packet(self, packet: zigpy.types.ZigbeePacket) -> None:
         if not self.is_controller_running:

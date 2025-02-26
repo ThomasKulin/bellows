@@ -181,6 +181,38 @@ class ProtocolHandler(abc.ABC):
         if data:
             LOGGER.debug("Frame contains trailing data: %s", data)
 
+        if frame_name == "incomingMessageHandler" and result[1].options & 0x8000:  # incoming message with APS_OPTION_FRAGMENT raised
+            from bellows.ezsp.fragmentation import fragment_manager
+
+            # Extract received APS frame and sender
+            aps_frame = result[1]
+            sender = result[4] 
+
+            group_id = aps_frame.groupId
+            profile_id = aps_frame.profileId
+            cluster_id = aps_frame.clusterId
+            aps_seq = aps_frame.sequence
+            
+            complete, reassembled, frag_count, frag_index = fragment_manager.handle_incoming_fragment(
+                sender_nwk=sender,
+                aps_sequence=aps_seq,
+                profile_id=profile_id,
+                cluster_id=cluster_id,
+                group_id=group_id,
+                payload=result[7]
+            )
+            asyncio.create_task(self._send_fragment_ack(sender, aps_frame, frag_count, frag_index))  # APS Ack
+
+            if not complete:
+                # Do not pass partial data up the stack
+                LOGGER.debug("Fragment reassembly not complete. waiting for more data.")
+                return
+            else:
+                # Replace partial data with fully reassembled data
+                result[7] = reassembled
+                
+                LOGGER.debug("Reassembled fragmented message. Proceeding with normal handling.")
+
         if sequence in self._awaiting:
             expected_id, schema, future = self._awaiting.pop(sequence)
             try:
@@ -205,6 +237,27 @@ class ProtocolHandler(abc.ABC):
         else:
             self._handle_callback(frame_name, result)
 
+    async def _send_fragment_ack(self, sender: int, incoming_aps: t.EmberApsFrame, fragment_count: int, fragment_index: int):
+       
+        ackFrame = t.EmberApsFrame(
+            profileId=incoming_aps.profileId,
+            clusterId=incoming_aps.clusterId,
+            sourceEndpoint=incoming_aps.destinationEndpoint,
+            destinationEndpoint=incoming_aps.sourceEndpoint,
+            options=incoming_aps.options,
+            groupId=((0xFF00) | (fragment_index & 0xFF)),
+            sequence=incoming_aps.sequence
+        )
+
+        LOGGER.debug("Sending fragment ack to 0x%04X for fragment index=%d/%d", sender, fragment_index, fragment_count)
+        await self.sendReply(sender, ackFrame, b'')
+       
+    async def _cleanup_fragments_periodically(self):
+        from bellows.ezsp.fragmentation import fragment_manager
+        while True:
+            await asyncio.sleep(5)
+            fragment_manager.cleanup_expired()
+        
     def __getattr__(self, name: str) -> Callable:
         if name not in self.COMMANDS:
             raise AttributeError(f"{name} not found in COMMANDS")

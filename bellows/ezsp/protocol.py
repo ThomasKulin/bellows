@@ -212,10 +212,13 @@ class ProtocolHandler(abc.ABC):
                 fragment_index=fragment_index,
                 payload=result[7],
             )
+            if not hasattr(self, "_ack_tasks"):
+                self._ack_tasks = set()
             ack_task = asyncio.create_task(
                 self._send_fragment_ack(sender, aps_frame, frag_count, frag_index)
             )  # APS Ack
-            ack_task.add_done_callback(self._ack_tasks.remove)
+            self._ack_tasks.add(ack_task)
+            ack_task.add_done_callback(lambda t: self._ack_tasks.discard(t))
 
             if not complete:
                 # Do not pass partial data up the stack

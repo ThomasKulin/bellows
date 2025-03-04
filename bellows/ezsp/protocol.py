@@ -280,7 +280,7 @@ class ProtocolHandler(abc.ABC):
             fragment_count,
         )
         status = await self.sendReply(sender, ackFrame, b"")
-        return status
+        return status[0]
 
     def __getattr__(self, name: str) -> Callable:
         if name not in self.COMMANDS:

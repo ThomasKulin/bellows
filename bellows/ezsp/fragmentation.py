@@ -2,9 +2,10 @@
 mirroring the logic from fragmentation.c in the EmberZNet stack.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
-from typing import Dict, Optional, Tuple
 
 LOGGER = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ LOGGER = logging.getLogger(__name__)
 FRAGMENT_TIMEOUT = 10
 
 # store partial data keyed by (sender, aps_sequence, profile_id, cluster_id)
-FragmentKey = Tuple[int, int, int, int]
+FragmentKey = tuple[int, int, int, int]
 
 
 class _FragmentEntry:
@@ -21,7 +22,6 @@ class _FragmentEntry:
         self.fragment_count = fragment_count
         self.fragments_received = 0
         self.fragment_data = {}
-        self.start_time = asyncio.get_event_loop().time()
 
     def add_fragment(self, index: int, data: bytes) -> None:
         if index not in self.fragment_data:
@@ -39,8 +39,8 @@ class _FragmentEntry:
 
 class FragmentManager:
     def __init__(self):
-        self._partial: Dict[FragmentKey, _FragmentEntry] = {}
-        self._cleanup_timers: Dict[FragmentKey, asyncio.TimerHandle] = {}
+        self._partial: dict[FragmentKey, _FragmentEntry] = {}
+        self._cleanup_timers: dict[FragmentKey, asyncio.TimerHandle] = {}
 
     def handle_incoming_fragment(
         self,
@@ -51,7 +51,7 @@ class FragmentManager:
         fragment_count: int,
         fragment_index: int,
         payload: bytes,
-    ) -> Tuple[bool, Optional[bytes], int, int]:
+    ) -> tuple[bool, bytes | None, int, int]:
         """Handle a newly received fragment.
 
         :param sender_nwk: NWK address or the short ID of the sender.

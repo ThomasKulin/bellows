@@ -114,7 +114,3 @@ class FragmentManager:
         )
         self._partial.pop(key, None)
         self._cleanup_timers.pop(key, None)
-
-
-# Create a single global manager instance
-fragment_manager = FragmentManager()

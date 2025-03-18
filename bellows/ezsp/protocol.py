@@ -20,6 +20,7 @@ from zigpy.datastructures import PriorityDynamicBoundedSemaphore
 
 from bellows.config import CONF_EZSP_POLICIES
 from bellows.exception import InvalidCommandError
+from bellows.ezsp.fragmentation import FragmentManager
 import bellows.types as t
 
 if TYPE_CHECKING:
@@ -53,6 +54,7 @@ class ProtocolHandler(abc.ABC):
 
         # Cached by `set_extended_timeout` so subsequent calls are a little faster
         self._address_table_size: int | None = None
+        self._fragment_manager = FragmentManager()
 
     def _ezsp_frame(self, name: str, *args: Any, **kwargs: Any) -> bytes:
         """Serialize the named frame and data."""
@@ -184,8 +186,6 @@ class ProtocolHandler(abc.ABC):
         if (
             frame_name == "incomingMessageHandler" and result[1].options & 0x8000
         ):  # incoming message with APS_OPTION_FRAGMENT raised
-            from bellows.ezsp.fragmentation import fragment_manager
-
             # Extract received APS frame and sender
             aps_frame = result[1]
             sender = result[4]
@@ -203,7 +203,7 @@ class ProtocolHandler(abc.ABC):
                 reassembled,
                 frag_count,
                 frag_index,
-            ) = fragment_manager.handle_incoming_fragment(
+            ) = self._fragment_manager.handle_incoming_fragment(
                 sender_nwk=sender,
                 aps_sequence=aps_seq,
                 profile_id=profile_id,

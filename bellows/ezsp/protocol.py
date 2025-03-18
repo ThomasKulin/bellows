@@ -55,6 +55,7 @@ class ProtocolHandler(abc.ABC):
         # Cached by `set_extended_timeout` so subsequent calls are a little faster
         self._address_table_size: int | None = None
         self._fragment_manager = FragmentManager()
+        self._fragment_ack_tasks: set[asyncio.Task] = set()
 
     def _ezsp_frame(self, name: str, *args: Any, **kwargs: Any) -> bytes:
         """Serialize the named frame and data."""
@@ -212,13 +213,13 @@ class ProtocolHandler(abc.ABC):
                 fragment_index=fragment_index,
                 payload=result[7],
             )
-            if not hasattr(self, "_ack_tasks"):
-                self._ack_tasks = set()
+
             ack_task = asyncio.create_task(
                 self._send_fragment_ack(sender, aps_frame, frag_count, frag_index)
             )  # APS Ack
-            self._ack_tasks.add(ack_task)
-            ack_task.add_done_callback(lambda t: self._ack_tasks.discard(t))
+
+            self._fragment_ack_tasks.add(ack_task)
+            ack_task.add_done_callback(lambda t: self._fragment_ack_tasks.discard(t))
 
             if not complete:
                 # Do not pass partial data up the stack

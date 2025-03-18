@@ -199,11 +199,12 @@ async def test_incoming_fragmented_message_incomplete(prot_hndl, caplog):
         caplog.set_level(logging.DEBUG)
         prot_hndl(packet)
 
-        assert hasattr(prot_hndl, "_ack_tasks")
-        assert len(prot_hndl._ack_tasks) == 1
-        ack_task = next(iter(prot_hndl._ack_tasks))
+        assert len(prot_hndl._fragment_ack_tasks) == 1
+        ack_task = next(iter(prot_hndl._fragment_ack_tasks))
         await asyncio.gather(ack_task)  # Ensure task completes and triggers callback
-        assert len(prot_hndl._ack_tasks) == 0, "Done callback should have removed task"
+        assert (
+            len(prot_hndl._fragment_ack_tasks) == 0
+        ), "Done callback should have removed task"
 
         prot_hndl._handle_callback.assert_not_called()
         assert "Fragment reassembly not complete. waiting for more data." in caplog.text
@@ -248,11 +249,12 @@ async def test_incoming_fragmented_message_complete(prot_hndl, caplog):
 
         # Packet 1
         prot_hndl(packet1)
-        assert hasattr(prot_hndl, "_ack_tasks")
-        assert len(prot_hndl._ack_tasks) == 1
-        ack_task = next(iter(prot_hndl._ack_tasks))
+        assert len(prot_hndl._fragment_ack_tasks) == 1
+        ack_task = next(iter(prot_hndl._fragment_ack_tasks))
         await asyncio.gather(ack_task)  # Ensure task completes and triggers callback
-        assert len(prot_hndl._ack_tasks) == 0, "Done callback should have removed task"
+        assert (
+            len(prot_hndl._fragment_ack_tasks) == 0
+        ), "Done callback should have removed task"
 
         prot_hndl._handle_callback.assert_not_called()
         assert (
@@ -263,11 +265,12 @@ async def test_incoming_fragmented_message_complete(prot_hndl, caplog):
 
         # Packet 2
         prot_hndl(packet2)
-        assert hasattr(prot_hndl, "_ack_tasks")
-        assert len(prot_hndl._ack_tasks) == 1
-        ack_task = next(iter(prot_hndl._ack_tasks))
+        assert len(prot_hndl._fragment_ack_tasks) == 1
+        ack_task = next(iter(prot_hndl._fragment_ack_tasks))
         await asyncio.gather(ack_task)  # Ensure task completes and triggers callback
-        assert len(prot_hndl._ack_tasks) == 0, "Done callback should have removed task"
+        assert (
+            len(prot_hndl._fragment_ack_tasks) == 0
+        ), "Done callback should have removed task"
 
         prot_hndl._handle_callback.assert_called_once_with(
             "incomingMessageHandler",

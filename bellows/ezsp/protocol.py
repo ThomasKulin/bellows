@@ -185,19 +185,16 @@ class ProtocolHandler(abc.ABC):
             LOGGER.debug("Frame contains trailing data: %s", data)
 
         if (
-            frame_name == "incomingMessageHandler" and result[1].options & 0x8000
-        ):  # incoming message with APS_OPTION_FRAGMENT raised
+            frame_name == "incomingMessageHandler"
+            and result[1].options & t.EmberApsOption.APS_OPTION_FRAGMENT
+        ):
             # Extract received APS frame and sender
             aps_frame = result[1]
             sender = result[4]
 
-            group_id = aps_frame.groupId
-            profile_id = aps_frame.profileId
-            cluster_id = aps_frame.clusterId
-            aps_seq = aps_frame.sequence
-
-            fragment_count = (group_id >> 8) & 0xFF
-            fragment_index = group_id & 0xFF
+            # The fragment count and index are encoded in the groupId field
+            fragment_count = (aps_frame.groupId >> 8) & 0xFF
+            fragment_index = aps_frame.groupId & 0xFF
 
             (
                 complete,
@@ -206,9 +203,9 @@ class ProtocolHandler(abc.ABC):
                 frag_index,
             ) = self._fragment_manager.handle_incoming_fragment(
                 sender_nwk=sender,
-                aps_sequence=aps_seq,
-                profile_id=profile_id,
-                cluster_id=cluster_id,
+                aps_sequence=aps_frame.sequence,
+                profile_id=aps_frame.profileId,
+                cluster_id=aps_frame.clusterId,
                 fragment_count=fragment_count,
                 fragment_index=fragment_index,
                 payload=result[7],
@@ -225,13 +222,13 @@ class ProtocolHandler(abc.ABC):
                 # Do not pass partial data up the stack
                 LOGGER.debug("Fragment reassembly not complete. waiting for more data.")
                 return
-            else:
-                # Replace partial data with fully reassembled data
-                result[7] = reassembled
 
-                LOGGER.debug(
-                    "Reassembled fragmented message. Proceeding with normal handling."
-                )
+            # Replace partial data with fully reassembled data
+            result[7] = reassembled
+
+            LOGGER.debug(
+                "Reassembled fragmented message. Proceeding with normal handling."
+            )
 
         if sequence in self._awaiting:
             expected_id, schema, future = self._awaiting.pop(sequence)

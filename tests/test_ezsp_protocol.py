@@ -135,7 +135,6 @@ async def test_parsing_schema_response(prot_hndl_v9):
     assert rsp == GetTokenDataRsp(status=t.EmberStatus.LIBRARY_NOT_PRESENT)
 
 
-@pytest.mark.asyncio
 async def test_send_fragment_ack(prot_hndl, caplog):
     """Test the _send_fragment_ack method."""
     sender = 0x1D6F
@@ -178,7 +177,6 @@ async def test_send_fragment_ack(prot_hndl, caplog):
         mock_send_reply.assert_called_once_with(sender, expected_ack_frame, b"")
 
 
-@pytest.mark.asyncio
 async def test_incoming_fragmented_message_incomplete(prot_hndl, caplog):
     """Test handling of an incomplete fragmented message."""
     packet = b"\x90\x01\x45\x00\x05\x01\x01\xff\x02\x02\x40\x81\x00\x02\xee\xff\xf8\x6f\x1d\xff\xff\x01\xdd"
@@ -212,7 +210,6 @@ async def test_incoming_fragmented_message_incomplete(prot_hndl, caplog):
         mock_ack.assert_called_once_with(sender, aps_frame, 2, 0)
 
 
-@pytest.mark.asyncio
 async def test_incoming_fragmented_message_complete(prot_hndl, caplog):
     """Test handling of a complete fragmented message."""
     packet1 = (
